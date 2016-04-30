@@ -47,10 +47,10 @@ After a successfull build, the resulting executable (or library), must be modify
 
 ## What is it good for? ##
 ~~Absolutely nothing~~
-NLog is not for everyone. To be honest, it probably doesn't suit most application, but it has two very important advantages.
+NLog is not for everyone. To be honest, it probably doesn't suit most application, but it has two very distinct advantages.
 
 The first one is of course the smaller binary size.
-A small memory footprint is not always sought for, but this is critical for embedded devices and systems low on resources.
+A small memory footprint is not always sought for, but it is critical for embedded devices and systems low on resources.
 Not only the each log entry is small, but they all have the exact same size.
 
 The second one is the fact that the resulting binary contains no textual information that might aid a potential attacker trying to reverse engineer it.
@@ -136,3 +136,11 @@ Example:
 
 #include "NLog.h"
 ```
+
+## Example Use Case ##
+    I am writing the firmware of a tiny embedded controller, in charge of regulating the heat of an industrial boiler.
+    As boilers go (I guess), there are many points of failure, and in order to write a robust application, I must log those errors.
+    The device has no networking capability, and so, it must store the logs localy until a tech will come to reclaim them.
+    The storage capacity of the board is close to non-existant, so I store only the indicies of each NLog entry, which results in 8 bytes per entry.
+
+    When a tech comes to field, all he has to do is read the log entries, and cross-reference the stored indicies with the dictionary generated at compile time.

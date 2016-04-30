@@ -101,15 +101,18 @@ class NLogContext(object):
 
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(
-        description='searches an ELF file for NLog messages, collects them, and strips them off of the ELF file.')
+        description='Searches an ELF file for NLog messages, collects them, and strips them off of the ELF file.')
     arg_parser.add_argument('object_file_path',
                             help='The path to the input object file.')
     arg_parser.add_argument('nlog_dictionary_path', nargs='?',
                             help='The name of the resulting dictionary file.')
-    arg_parser.add_argument('-c', '--clean', action='store_true',
+    group = arg_parser.add_mutually_exclusive_group()
+
+    group.add_argument('-c', '--clean', action='store_true',
                             help='Do not extract messages, just strip the ELF.')
-    arg_parser.add_argument('-d', '--dirty', action='store_true',
+    group.add_argument('-d', '--dirty', action='store_true',
                             help='Keep the log messages in the ELF after extraction.')
+
     arg_parser.add_argument('--count', action='store_true',
                             help='Count NLog messages in an ELF file.')
     arg_parser.add_argument('-t', '--trim', action='store_true',
@@ -117,12 +120,8 @@ if __name__ == '__main__':
 
     args = arg_parser.parse_args()
 
-    if args.clean and args.dirty:
-        print ""
-
     context = NLogContext(args.object_file_path)
 
-    # Establish
     if args.count or args.clean:
         context.output = None
     elif args.nlog_dictionary_path is not None:
