@@ -1,0 +1,30 @@
+#!/usr/bin/env python
+
+# from scripts.scrub import NLogContext
+import binascii
+import os
+import subprocess
+
+def generate_object_id(source):
+    return binascii.crc32(source.name) & 0xffffffff
+
+def scrub(target, source, env):
+    for object_file, dict_file in zip(source, target):
+        subprocess.check_output(['../../scripts/scrub.py', object_file.name, dict_file.name])
+
+def wrap_builder(bld):
+    def build_with_nlog(target, source, env):
+        env.Replace(CPPDEFINES='NLOG_OBJECT_ID=%#08x' % generate_object_id(source[0]))
+        bld.action(target, source, env)
+
+    return Builder(action = build_with_nlog,
+                   suffix = bld.suffix,
+                   src_suffix = bld.src_suffix)
+
+env = Environment()
+
+env['BUILDERS']['Object'] = wrap_builder(env['BUILDERS']['Object'])
+nlog_builder = Builder(action=scrub)
+env.Append(BUILDERS = {'NLog': nlog_builder})
+env.Program(target='nlog', source=['main.cpp'], CPPPATH=['../../include/'])
+env.NLog(target='nlog-dict', source=['nlog'])
