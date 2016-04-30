@@ -104,7 +104,7 @@ A postfix is appended to each of the log messages.
 ### Parameters ###
 The parameter type is configurable by defining the `NLOG_OPT_PARAM_TYPE` symbol.
 If remained undefined, the parameter type will be `uint32_t`.
-The type can be any valid C / C++ type, including references and pointers, but it must be defined before the inclusion of the NLog header.
+The type can be any valid numeric type.
 
 Its default value of an unspecified paramter is configurable by `NLOG_OPT_DEFAULT_PARAM_VALUE` (which is 0, by default).
 
