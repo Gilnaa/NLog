@@ -13,11 +13,12 @@ def scrub(target, source, env):
 
 def wrap_builder(bld):
     def build_with_nlog(target, source, env):
-        env.Replace(CPPDEFINES='NLOG_OBJECT_ID=%#08x' % generate_object_id(source[0]))
+        env.Replace(CPPDEFINES='NLOG_OBJECT_ID=%08x' % generate_object_id(source[0]))
         bld.action(target, source, env)
 
     return Builder(action = build_with_nlog,
                    suffix = bld.suffix,
+                   source_scanner = bld.source_scanner,
                    src_suffix = bld.src_suffix)
 
 env = Environment()

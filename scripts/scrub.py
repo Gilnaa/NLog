@@ -23,16 +23,15 @@ class NLogContext(object):
 
     @staticmethod
     def parse_section_data(name, offset, size):
-        match = re.match('.nlog-msg-(?P<objectID>0x[0-9a-f]+)-(?P<messageID>[0-9]+)', name, re.IGNORECASE)
-        object_id = int(match.group('objectID'), 16)
-        message_id = int(match.group('messageID'))
+        match = re.match('.nlog-msg-(?P<messageID>0x[0-9a-f]+)', name, re.IGNORECASE)
+        message_id = int(match.group('messageID'), 16)
         offset = int(offset, 16)
         size = int(size, 16)
-        return object_id, message_id, offset, size
+        return message_id, offset, size
 
     def get_nlog_sections(self):
         dump = subprocess.check_output(['objdump', '-h', self.source_file]).split('\n')
-        data = filter(lambda line: re.search(".*nlog-msg.*", line), dump)
+        data = filter(lambda line: re.search('.*nlog-msg.*', line), dump)
 
         object_file = open(self.source_file, 'r')
         messages = []
@@ -42,12 +41,12 @@ class NLogContext(object):
             index, name, size, vma, lma, offset, alignment = line.strip().split()
 
             # Extract and parse metadata
-            object_id, message_id, offset, size = self.parse_section_data(name, offset, size)
+            message_id, offset, size = self.parse_section_data(name, offset, size)
 
             # Read message data
             object_file.seek(offset)
             string = object_file.read(size).strip('\x00')
-            messages.append((object_id, message_id, string))
+            messages.append((message_id, string))
 
         object_file.close()
 
@@ -59,14 +58,11 @@ class NLogContext(object):
         self.messages = {}
         data = self.get_nlog_sections()
 
-        for object_id, message_id, string in data:
-            if object_id not in self.messages:
-                self.messages[object_id] = {}
+        for message_id, string in data:
+            if message_id in self.messages:
+                raise ValueError('Duplicated messages IDs: %08x', message_id)
 
-            if message_id in self.messages[object_id]:
-                raise ValueError('Duplicated ID pairings: %08x, %08x', object_id, message_id)
-
-            self.messages[object_id][message_id] = string
+            self.messages[message_id] = string
 
         return self.messages
 

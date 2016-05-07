@@ -15,11 +15,11 @@ using namespace std;
 
 #include "NLog.h"
 
-void __NLog_Report(nlog_object_id_t objectID, nlog_message_id_t messageID,
-                   nlog_parameter_t param1, nlog_parameter_t param2,
-                   nlog_parameter_t param3, nlog_parameter_t param4)
+void __NLog_Report(nlog_message_id_t messageID,
+                   uint32_t param1 = 0, uint32_t param2 = 0,
+                   uint32_t param3 = 0, uint32_t param4 = 0)
 {
-    cout << "[" << hex << objectID << ", " << messageID << "], " << dec
+    cout << "[" << hex << messageID << dec << "], "
             << param1 << ", "
             << param2 << ", "
             << param3 << ", "
@@ -28,12 +28,9 @@ void __NLog_Report(nlog_object_id_t objectID, nlog_message_id_t messageID,
 
 int main()
 {
-    cout << "This is a regular print" << endl;
     NLOG("This is a message.");
-    NLOG_ERROR("This is an error message.");
-    NLOG_INFO("This is an info message.");
-    NLOG_DEBUG("This is a debug message.");
-
-    NLOG("This is the %dth message.", 5);
+    NLOG("This is a message.");
+    NLOG("This is a message.");
+    cout << "This is a regular print" << endl;
     return 0;
 }
