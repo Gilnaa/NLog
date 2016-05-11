@@ -9,12 +9,10 @@ if __name__ == '__main__':
         description='Searches a NLog dictionary for the given indicies')
 
     arg_parser.add_argument('nlog_dictionary_path', help='The name of the resulting dictionary file.')
-    arg_parser.add_argument('object_id')
     arg_parser.add_argument('message_id')
 
     args = arg_parser.parse_args()
 
-    object_id = str(int(args.object_id, 0))
     message_id = str(int(args.message_id, 0))
 
     with open(args.nlog_dictionary_path, 'r') as dictionary:
@@ -25,13 +23,8 @@ if __name__ == '__main__':
         exit(1)
 
     logs = data['messages']
-
-    if object_id not in logs:
-        print 'Object ID (%#08x) not found in the dictionary' % object_id
-        exit(1)
-
-    if message_id not in logs[object_id]:
+    if message_id not in logs:
         print 'Message ID (%#08x) not found in the dictionary' % message_id
         exit(1)
 
-    print logs[object_id][message_id]
+    print logs[message_id]

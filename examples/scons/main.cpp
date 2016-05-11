@@ -29,8 +29,9 @@ void __NLog_Report(nlog_message_id_t messageID,
 int main()
 {
     NLOG("This is a message.");
-    NLOG("This is a message.");
-    NLOG("This is a message.");
+    NLOG_ERROR("This is a message.");
+    NLOG_DEBUG("This is a message.");
+    NLOG_INFO("This is a message.");
     cout << "This is a regular print" << endl;
     return 0;
 }
