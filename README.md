@@ -24,23 +24,30 @@ NLog doesn't do the actual logging, it only wraps it.
 The user has to implement the following function.
 The details of actual logging are not important, and are up to the developer to decide.
 ```
-extern void __NLog_Report(nlog_object_id_t,
-                          nlog_message_id_t,
+extern void __NLog_Report(nlog_message_id_t,
                           nlog_parameter_t,
                           nlog_parameter_t,
                           nlog_parameter_t,
                           nlog_parameter_t);
 ```
 
+Currently the number of parameters is hard-coded to 4, but in the future it will be configurable from 0 to 10 parameters.
+
 ### Build-System ###
 NLog requires build-system integration.
 
 #### Source Compilation ####
 For each source file compiled, a unique ID should be generated and injected as a preprocessor symbol (using GCC's `-D`). 
-The ID is an unsigned 32bit, and the injected-format has to be comply with the `%#08x` format string. (e.g. 0xDEADBEEF)
+The ID is an unsigned 32bit, and the injected-format has to be comply with the `%08x` format string. (e.g. DEADBEEF)
 
-The included example shows how to integrate NLog with an SCons project.
+Compilation will fail if the ID is prepended with `0x`
+
+The included example shows how to integrate NLog with SCons or Makefile.
+
 The used ID is a CRC32 value calculated using the file name, but any value is applicable as long as it is unique between source files.
+
+A script called `gen_id.py` is provided in the `scripts/` directory.
+It can be called to generate an ID or imported into a python module. (Useful for scons or for extension by other scripts)
 
 #### Post-Build ####
 After a successfull build, the resulting executable (or library), must be modifyed by the `scrub.py`, which extracts the log messages from the ELF into a seperate dictionary, and then proceeds to clean the ELF.
@@ -136,11 +143,3 @@ Example:
 
 #include "NLog.h"
 ```
-
-## Example Use Case ##
-    I am writing the firmware of a tiny embedded controller, in charge of regulating the heat of an industrial boiler.
-    As boilers go (I guess), there are many points of failure, and in order to write a robust application, I must log those errors.
-    The device has no networking capability, and so, it must store the logs localy until a tech will come to reclaim them.
-    The storage capacity of the board is close to non-existant, so I store only the indicies of each NLog entry, which results in 8 bytes per entry.
-
-    When a tech comes to field, all he has to do is read the log entries, and cross-reference the stored indicies with the dictionary generated at compile time.

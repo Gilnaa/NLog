@@ -1,7 +1,7 @@
 /**
  * @file NLog.h
  *
- * @author  gilnaa
+ * @author  Gilad Naaman
  * @since   29/04/2016
  */
 
