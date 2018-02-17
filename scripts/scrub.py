@@ -3,139 +3,152 @@
 import subprocess
 import re
 import json
-import argparse
 import time
-
+import struct
 import sys
 
 __author__ = 'Gilad Naaman'
-__all__ = ['scrub_object_file']
 
-NLOG_MESSAGE_PATTERN = '*nlog-msg*'
+MAGIC = 0x676F4C4E
+
+#   template<size_t N>
+#   struct Entry
+#   {
+#       uint32_t magic;
+#       uint32_t objectId;
+#       uint16_t lineNumber;
+#       uint16_t columnNumber;
+#       uint32_t messageSize;
+#       char msg[N];
+#   } __attribute__((packed));
+class Entry:
+    def __init__(self, object_id, line_number, text):
+        self.object_id = object_id
+        self.line_number = line_number
+        self.text = text
+
+    @classmethod
+    def parse(cls, section):
+        STRUCT_STRING = "4I"
+        HEADER_LENGTH = 16
+
+        entries = []
+        while len(section) > HEADER_LENGTH:
+            header = section[:HEADER_LENGTH]
+            section = section[HEADER_LENGTH:]
+
+            magic, object_id, line_number, message_size = struct.unpack(STRUCT_STRING, header)
+
+            if magic != MAGIC:
+                raise ValueError("Invalid NLog magic")
+
+            if len(section) < message_size:
+                raise ValueError("Malformed section: not enough bytes for message")
+
+            message = section[:message_size].strip('\x00')
+            section = section[message_size:]
+
+            entries.append(Entry(object_id, line_number, message))
+
+            if len(section) > 0:
+                try:
+                    next_magic = section.index(struct.pack("I", MAGIC))
+                    section = section[next_magic:]
+                except:
+                    break
+
+        return entries
+
+#   template<size_t N>
+#   struct TranslationUnitMetadata
+#   {
+#       uint32_t magic;
+#       uint32_t objectId;
+#       uint32_t nameSize;
+#       char name[N];
+#   };
+class TranslationUnitMetadata:
+    def __init__(self, object_id, file_name):
+        self.object_id = object_id
+        self.file_name = file_name
+        self.entries = []
+
+    @classmethod
+    def parse(cls, section):
+        STRUCT_STRING = "III": {
+        HEADER_LENGTH = 12
+
+        objects = []
+        while len(section) > HEADER_LENGTH:
+            header = section[:HEADER_LENGTH]
+            section = section[HEADER_LENGTH:]
+
+            magic, object_id, name_size = struct.unpack(STRUCT_STRING, header)
+
+            if magic != MAGIC:
+                raise ValueError("Invalid NLog magic")
+
+            if len(section) < name_size:
+                raise ValueError("Malformed section: not enough bytes for message")
+
+            name = section[:name_size].strip('\x00')
+            section = section[name_size:]
+
+            id_collisions = list(filter(lambda o: o.object_id == object_id, objects))
+            if len(id_collisions) != 0:
+                raise ValueError("Collision for ID %08x. Files: '%s', '%s'" % (object_id, id_collisions[0].file_name, name))
+
+            objects.append(TranslationUnitMetadata(object_id, name))
+
+            if len(section) > 0:
+                try:
+                    next_magic = section.index(struct.pack("I", MAGIC))
+                    section = section[next_magic:]
+                except:
+                    break
+
+        return objects
 
 
-class NLogContext(object):
-    def __init__(self, source_file, output=None):
-        self.source_file = source_file
-        self.output = output
-        self.messages = None
-        self.timestamp = time.ctime()
+def get_section_data(source_file, objdump_line):
+    index, name, size, vma, lma, offset, alignment = objdump_line.strip().split()
 
-    @staticmethod
-    def parse_section_data(name, offset, size):
-        match = re.match('.nlog-msg-(?P<messageID>0x[0-9a-f]+)', name, re.IGNORECASE)
-        message_id = int(match.group('messageID'), 16)
-        offset = int(offset, 16)
-        size = int(size, 16)
-        return message_id, offset, size
+    source_file.seek(int(offset, 16))
+    return source_file.read(int(size, 16))
 
-    def get_nlog_sections(self):
-        dump = subprocess.check_output(['objdump', '-h', self.source_file]).split('\n')
-        data = filter(lambda line: re.search('.*nlog-msg.*', line), dump)
 
-        object_file = open(self.source_file, 'r')
-        messages = []
+def main():
+    source_file_name = sys.argv[1]
 
-        for line in data:
-            # Parse line
-            index, name, size, vma, lma, offset, alignment = line.strip().split()
+    dump = subprocess.check_output(['objdump', '-h', source_file_name]).split('\n')
+    nlog_objects = filter(lambda line: re.search('.nlog_objects', line), dump)[0]
+    nlog_entries = filter(lambda line: re.search('.nlog_entries', line), dump)[0]
+    with open(source_file_name, 'r') as source_file:
+        nlog_entries = Entry.parse(get_section_data(source_file, nlog_entries))
+        nlog_objects = TranslationUnitMetadata.parse(get_section_data(source_file, nlog_objects))
 
-            # Extract and parse metadata
-            message_id, offset, size = self.parse_section_data(name, offset, size)
+    for o in nlog_objects:
+        entries = filter(lambda e: e.object_id == o.object_id, nlog_entries)
+        o.entries.extend(entries)
 
-            # Read message data
-            object_file.seek(offset)
-            string = object_file.read(size).strip('\x00')
-            messages.append((message_id, string))
+    # print 'Objects:'
+    # for o in nlog_objects:
+    #     print "\t%08x -> %s" % (o.object_id, o.file_name)
+    #
+    # print 'Entries:'
+    # for e in nlog_entries:
+    #     print "\t%08x:%u -> %s" % (e.object_id, e.line_number, e.text)
 
-        object_file.close()
 
-        return messages
 
-    def scrub(self):
-        assert self.messages is None
+    output_file = {
+        'source_file': source_file_name,
+        'timestamp': time.ctime(),
+        'objects': [{'id': o.object_id, 'name': o.file_name, 'entries': {e.line_number: e.text for e in o.entries}} for o in nlog_objects],
+    }
 
-        self.messages = {}
-        data = self.get_nlog_sections()
-
-        for message_id, string in data:
-            if message_id in self.messages:
-                raise ValueError('Duplicated messages IDs: %08x', message_id)
-
-            self.messages[message_id] = string
-
-        return self.messages
-
-    def serialize(self):
-        if self.output is None:
-            return
-
-        if self.messages is None:
-            self.scrub()
-
-        whole_file = {
-            'source_file': args.object_file_path,
-            'timestamp': time.ctime(),
-            'messages': self.messages
-        }
-
-        json.dump(whole_file, self.output)
-
-    def count(self):
-        if self.messages is None:
-            self.scrub()
-
-        cnt = 0
-        for object_id, messages in self.messages.items():
-            cnt += len(messages)
-
-        return cnt
-
-    def clean(self):
-        subprocess.call(['objcopy', '--remove-section', NLOG_MESSAGE_PATTERN, self.source_file])
+    print json.dumps(output_file, indent=4)
 
 
 if __name__ == '__main__':
-    arg_parser = argparse.ArgumentParser(
-        description='Searches an ELF file for NLog messages, collects them, and strips them off of the ELF file.')
-    arg_parser.add_argument('object_file_path',
-                            help='The path to the input object file.')
-    arg_parser.add_argument('nlog_dictionary_path', nargs='?',
-                            help='The name of the resulting dictionary file.')
-    group = arg_parser.add_mutually_exclusive_group()
-
-    group.add_argument('-c', '--clean', action='store_true',
-                            help='Do not extract messages, just strip the ELF.')
-    group.add_argument('-d', '--dirty', action='store_true',
-                            help='Keep the log messages in the ELF after extraction.')
-
-    arg_parser.add_argument('--count', action='store_true',
-                            help='Count NLog messages in an ELF file.')
-    arg_parser.add_argument('-t', '--trim', action='store_true',
-                            help='Do not write to output if the ELF does not contain any messages.')
-
-    args = arg_parser.parse_args()
-
-    context = NLogContext(args.object_file_path)
-
-    if args.count or args.clean:
-        context.output = None
-    elif args.nlog_dictionary_path is not None:
-        context.output = open(args.nlog_dictionary_path, 'w+')
-    elif not args.clean and not args.count:
-        context.output = sys.stdout
-
-    if args.count:
-        print context.count()
-
-    if args.clean:
-        context.clean()
-
-    if not args.trim or context.count() > 0:
-        context.serialize()
-
-    if not args.dirty:
-        context.clean()
-
-    if context.output is not None:
-        context.output.close()
+    main()
